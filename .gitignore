@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+profiles/*.db
+config.yaml
+transcripts/
+logs/
+*.partial.md
+.agents/
+.beads/
