@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from meeting_scribe.audio.capture import AudioCapture
 from meeting_scribe.config import load_config
+
+logger = logging.getLogger(__name__)
 from meeting_scribe.detection.monitor import MeetingMonitor
 from meeting_scribe.diarization.embeddings import SpeakerEncoder
 from meeting_scribe.diarization.matcher import SpeakerMatcher
@@ -160,12 +164,61 @@ class MeetingScribeController:
         if self._writer is not None:
             self._writer.save_final()
 
+            # Kick off summarization in the background
+            if self._config.summarization.enabled:
+                output_path = self._writer.get_output_path()
+                threading.Thread(
+                    target=self._summarize_transcript,
+                    args=(output_path,),
+                    daemon=True,
+                    name="Summarizer",
+                ).start()
+
     def _toggle(self) -> None:
         """Hotkey callback — flip recording state."""
         if self._is_recording:
             self.stop()
         else:
             self.start()
+
+    # ------------------------------------------------------------------
+    # Summarization
+    # ------------------------------------------------------------------
+
+    def _summarize_transcript(self, transcript_path: Path) -> None:
+        """Generate a meeting summary in the background."""
+        try:
+            from meeting_scribe.summarization.engine import SummarizationEngine
+
+            engine = SummarizationEngine(
+                model=self._config.summarization.model,
+                host=self._config.summarization.ollama_host,
+                timeout=self._config.summarization.timeout_seconds,
+            )
+            summary_path = engine.summarize_file(transcript_path)
+
+            try:
+                import rumps
+                rumps.notification(
+                    title="Meeting Scribe",
+                    subtitle="Summary ready",
+                    message=str(summary_path.name),
+                )
+            except Exception:
+                pass
+
+            logger.info("Summarization complete: %s", summary_path)
+        except Exception:
+            logger.exception("Summarization failed for %s", transcript_path)
+            try:
+                import rumps
+                rumps.notification(
+                    title="Meeting Scribe",
+                    subtitle="Summary failed",
+                    message="Could not generate summary. Is Ollama running?",
+                )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Meeting detection callbacks

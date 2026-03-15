@@ -61,6 +61,14 @@ class OutputConfig:
 
 
 @dataclass
+class SummarizationConfig:
+    enabled: bool = True
+    model: str = "llama3.1:8b"
+    ollama_host: str = "http://localhost:11434"
+    timeout_seconds: int = 120
+
+
+@dataclass
 class UIConfig:
     auto_detect_meetings: bool = True
     notify_on_detection: bool = True
@@ -75,6 +83,7 @@ class Config:
     detection: DetectionConfig = field(default_factory=DetectionConfig)
     hotkey: HotkeyConfig = field(default_factory=HotkeyConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    summarization: SummarizationConfig = field(default_factory=SummarizationConfig)
     ui: UIConfig = field(default_factory=UIConfig)
 
 
@@ -100,6 +109,7 @@ def load_config(path: str | None = None) -> Config:
         "detection": (DetectionConfig, "detection"),
         "hotkey": (HotkeyConfig, "hotkey"),
         "output": (OutputConfig, "output"),
+        "summarization": (SummarizationConfig, "summarization"),
         "ui": (UIConfig, "ui"),
     }
 

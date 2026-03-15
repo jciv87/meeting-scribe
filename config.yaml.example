@@ -31,6 +31,12 @@ output:
   transcript_dir: "~/meeting-scribe/transcripts"
   incremental_save_seconds: 60
 
+summarization:
+  enabled: true
+  model: "llama3.1:8b"
+  ollama_host: "http://localhost:11434"
+  timeout_seconds: 120
+
 ui:
   auto_detect_meetings: true
   notify_on_detection: true
