@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "meeting-scribe"
@@ -19,5 +19,20 @@ dependencies = [
     "ollama>=0.4.0",
 ]
 
+[project.optional-dependencies]
+# Note: RealtimeSTT pins older faster-whisper. Install with:
+#   pip install --no-deps RealtimeSTT pyperclip pyaudio soundfile webrtcvad-wheels websocket-client websockets
+dictation = [
+    "pyperclip>=1.8.0",
+    "pyaudio>=0.2.14",
+    "soundfile>=0.13.0",
+    "webrtcvad-wheels>=2.0.14",
+    "websocket-client>=1.8.0",
+    "websockets>=15.0",
+]
+
 [project.scripts]
 meeting-scribe = "meeting_scribe.app:main"
+
+[tool.setuptools.packages.find]
+include = ["meeting_scribe*"]
