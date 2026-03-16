@@ -1,4 +1,12 @@
-"""Global hotkey listener using pynput."""
+"""Global hotkey listener using pynput.
+
+Uses keyboard.Listener (not GlobalHotKeys) to avoid a pynput 1.8.x bug on
+macOS where GlobalHotKeys._on_press() crashes with:
+    TypeError: _on_press() missing 1 required positional argument: 'injected'
+The bug affects pynput 1.7+/1.8.x on macOS with Python 3.13. keyboard.Listener
+does not exhibit this issue because the injected argument is consumed internally
+before reaching the caller-supplied on_press callback.
+"""
 
 from typing import Callable
 
@@ -24,35 +32,32 @@ class HotkeyListener:
     ) -> None:
         self.on_toggle = on_toggle
         self.combination = combination
-        self._hotkeys: object | None = None
+        self._listener: object | None = None
 
     def start(self) -> None:
         """Start listening for the global hotkey."""
         if not _PYNPUT_AVAILABLE:
             return
 
-        def _fire():
-            try:
-                self.on_toggle()
-            except Exception:
-                pass
-
-        # Fn+F12 arrives as plain F12 at the OS level on macOS
-        mapping = {
-            "<f12>": _fire,
-        }
+        def _on_press(key: object) -> None:
+            # Fn+F12 arrives as plain Key.f12 at the OS level on macOS.
+            if key == _keyboard.Key.f12:
+                try:
+                    self.on_toggle()
+                except Exception:
+                    pass
 
         try:
-            self._hotkeys = _keyboard.GlobalHotKeys(mapping)
-            self._hotkeys.start()  # type: ignore[attr-defined]
+            self._listener = _keyboard.Listener(on_press=_on_press)
+            self._listener.start()  # type: ignore[attr-defined]
         except Exception:
-            self._hotkeys = None
+            self._listener = None
 
     def stop(self) -> None:
         """Stop listening for the global hotkey."""
-        if self._hotkeys is not None:
+        if self._listener is not None:
             try:
-                self._hotkeys.stop()  # type: ignore[attr-defined]
+                self._listener.stop()  # type: ignore[attr-defined]
             except Exception:
                 pass
-            self._hotkeys = None
+            self._listener = None

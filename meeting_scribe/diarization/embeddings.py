@@ -12,6 +12,15 @@ import threading
 
 import numpy as np
 
+# Compatibility shim: SpeechBrain 1.0.x calls torchaudio.list_audio_backends()
+# which was removed in torchaudio 2.0+. Patch before any SpeechBrain import.
+try:
+    import torchaudio
+    if not hasattr(torchaudio, "list_audio_backends"):
+        torchaudio.list_audio_backends = lambda: []  # type: ignore[attr-defined]
+except ImportError:
+    pass
+
 _MODEL_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
 _EMBEDDING_DIM = 192
 
