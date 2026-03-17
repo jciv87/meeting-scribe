@@ -80,24 +80,36 @@ class TranscriptionWorker:
             except queue.Empty:
                 continue
 
-            audio, chunk_duration = chunk  # caller provides (ndarray, duration_s)
+            self._process_chunk(chunk)
 
+        # Drain any chunks that arrived after the stop signal (e.g. from flush()).
+        while True:
             try:
-                raw_segments = self._engine.transcribe_chunk(audio)
-            except Exception:
-                # Do not crash the worker on a bad chunk; just skip it.
-                self._chunk_queue.task_done()
-                self.chunk_offset += chunk_duration
-                continue
+                chunk = self._chunk_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._process_chunk(chunk)
 
-            adjusted = self._adjust_and_deduplicate(raw_segments)
+    def _process_chunk(self, chunk: tuple) -> None:
+        """Transcribe one chunk and enqueue the result."""
+        audio, chunk_duration = chunk  # caller provides (ndarray, duration_s)
 
-            if adjusted:
-                self._result_queue.put(adjusted)
-
-            # Advance the offset by the actual chunk duration.
-            self.chunk_offset += chunk_duration
+        try:
+            raw_segments = self._engine.transcribe_chunk(audio)
+        except Exception:
+            # Do not crash the worker on a bad chunk; just skip it.
             self._chunk_queue.task_done()
+            self.chunk_offset += chunk_duration
+            return
+
+        adjusted = self._adjust_and_deduplicate(raw_segments)
+
+        if adjusted:
+            self._result_queue.put(adjusted)
+
+        # Advance the offset by the actual chunk duration.
+        self.chunk_offset += chunk_duration
+        self._chunk_queue.task_done()
 
     # ------------------------------------------------------------------
     # Helpers

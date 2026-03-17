@@ -169,3 +169,39 @@ class TestTailStateUpdate:
         seg = make_segment(0.0, 2.0, "silence")  # no words
         result = worker._adjust_and_deduplicate([seg])
         assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# Post-stop drain (flush race condition)
+# ---------------------------------------------------------------------------
+
+class TestPostStopDrain:
+    """Verify that chunks arriving after stop() are still processed."""
+
+    def test_flush_chunk_processed_after_stop_event(self):
+        """Chunks pushed to the queue after stop_event is set must not be lost."""
+        from unittest.mock import MagicMock, patch
+        import numpy as np
+
+        chunk_q: queue.Queue = queue.Queue()
+        result_q: queue.Queue = queue.Queue()
+
+        mock_engine = MagicMock()
+        seg = make_segment(0.0, 1.0, "hello world")
+        mock_engine.transcribe_chunk.return_value = [seg]
+
+        worker = TranscriptionWorker(
+            engine=mock_engine,  # type: ignore[arg-type]
+            chunk_queue=chunk_q,
+            result_queue=result_q,
+            sample_rate=16000,
+        )
+
+        # Simulate: push a chunk, set stop event, then run the worker synchronously.
+        audio = np.zeros(16000, dtype=np.float32)
+        chunk_q.put((audio, 1.0))
+        worker._stop_event.set()  # stop event set BEFORE run() drains
+
+        worker.run()  # should still process the chunk in the drain loop
+
+        assert not result_q.empty(), "Flushed chunk was not processed after stop event"
