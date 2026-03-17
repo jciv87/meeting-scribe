@@ -92,3 +92,13 @@ class AudioCapture:
             self._stream.stop()
             self._stream.close()
             self._stream = None
+
+    def flush(self) -> None:
+        """Push any remaining buffered audio onto the chunk queue."""
+        remaining = self._buffer.read_pending()
+        if remaining.size > 0:
+            duration = len(remaining) / self._sample_rate
+            try:
+                self._chunk_queue.put_nowait((remaining, duration))
+            except queue.Full:
+                pass

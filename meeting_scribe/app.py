@@ -24,6 +24,7 @@ from meeting_scribe.output.writer import TranscriptWriter
 from meeting_scribe.transcription.engine import TranscriptionEngine
 from meeting_scribe.transcription.streaming import TranscriptionWorker
 from meeting_scribe.ui.menubar import MeetingScribeMenuBar
+from meeting_scribe.ui.overlay import RecordingOverlay
 
 if TYPE_CHECKING:
     from meeting_scribe.config import Config
@@ -96,6 +97,9 @@ class MeetingScribeController:
         self._recording_lock = threading.Lock()
         self._is_recording = False
 
+        # Floating overlay
+        self._overlay = RecordingOverlay()
+
         # Silence detection
         self._silence_cycles = 0
 
@@ -142,6 +146,7 @@ class MeetingScribeController:
             )
             self._recording_start = time.monotonic()
             self._is_recording = True
+            self._overlay.show()
 
         self._worker.start()
         self._capture.start()
@@ -152,8 +157,10 @@ class MeetingScribeController:
             if not self._is_recording:
                 return
             self._is_recording = False
+            self._overlay.hide()
 
         self._capture.stop()
+        self._capture.flush()
         self._worker.stop()
 
         # Drain any remaining results
@@ -350,6 +357,28 @@ class MeetingScribeController:
 
 def main() -> None:
     """Create all components and run the menu bar application."""
+    # Run startup health checks
+    from meeting_scribe.health import run_startup_checks
+
+    config = load_config()
+    warnings = run_startup_checks(
+        device_name=config.audio.device,
+        summarization_enabled=config.summarization.enabled,
+        ollama_host=config.summarization.ollama_host,
+        ollama_model=config.summarization.model,
+    )
+    for warning in warnings:
+        logger.warning(warning)
+        try:
+            import rumps
+            rumps.notification(
+                title="Meeting Scribe",
+                subtitle="Startup Warning",
+                message=warning.split("\n")[0],
+            )
+        except Exception:
+            pass
+
     controller = MeetingScribeController()
     menubar = MeetingScribeMenuBar(controller=controller)
 

@@ -19,6 +19,10 @@ class AudioRingBuffer:
         samples = np.asarray(samples, dtype=np.float32).ravel()
         n = len(samples)
         with self._lock:
+            # If more samples than capacity, only keep the most recent capacity samples
+            if n > self._capacity:
+                samples = samples[-self._capacity:]
+                n = self._capacity
             space_to_end = self._capacity - self._write_pos
             if n <= space_to_end:
                 self._buf[self._write_pos : self._write_pos + n] = samples
