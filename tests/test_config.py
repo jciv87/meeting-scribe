@@ -10,6 +10,7 @@ from meeting_scribe.config import (
     TranscriptionConfig,
     DiarizationConfig,
     DetectionConfig,
+    DictationConfig,
     HotkeyConfig,
     OutputConfig,
     SummarizationConfig,
@@ -73,6 +74,16 @@ class TestConfigDefaults:
         assert u.notify_on_detection is True
         assert u.auto_start_recording is False
 
+    def test_dictation_defaults(self):
+        d = DictationConfig()
+        assert d.enabled is True
+        assert d.hotkey == "ctrl+shift_r"
+        assert d.mode == "push_to_hold"
+        assert d.audio_device == ""
+        assert d.cleanup_model == "llama3.1:8b"
+        assert d.ollama_host == "http://localhost:11434"
+        assert d.cleanup_timeout_seconds == 30
+
     def test_config_has_all_sections(self, default_config):
         cfg = default_config
         assert isinstance(cfg.audio, AudioConfig)
@@ -83,6 +94,7 @@ class TestConfigDefaults:
         assert isinstance(cfg.output, OutputConfig)
         assert isinstance(cfg.summarization, SummarizationConfig)
         assert isinstance(cfg.ui, UIConfig)
+        assert isinstance(cfg.dictation, DictationConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -184,3 +196,29 @@ class TestOutputConfigTranscriptPath:
         o = OutputConfig(transcript_dir="/tmp/evil")
         with pytest.raises(ValueError, match="home directory"):
             _ = o.transcript_path
+
+
+# ---------------------------------------------------------------------------
+# DictationConfig — YAML overrides
+# ---------------------------------------------------------------------------
+
+class TestDictationConfigYAML:
+    def test_dictation_yaml_overrides(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        data = {
+            "dictation": {
+                "enabled": False,
+                "hotkey": "alt_r",
+                "mode": "toggle",
+                "cleanup_model": "mistral",
+            },
+        }
+        config_file.write_text(yaml.dump(data))
+        cfg = load_config(str(config_file))
+        assert cfg.dictation.enabled is False
+        assert cfg.dictation.hotkey == "alt_r"
+        assert cfg.dictation.mode == "toggle"
+        assert cfg.dictation.cleanup_model == "mistral"
+        # Unmentioned fields keep defaults
+        assert cfg.dictation.audio_device == ""
+        assert cfg.dictation.cleanup_timeout_seconds == 30

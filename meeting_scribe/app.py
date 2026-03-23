@@ -18,6 +18,9 @@ from meeting_scribe.detection.monitor import MeetingMonitor
 from meeting_scribe.diarization.embeddings import SpeakerEncoder
 from meeting_scribe.diarization.matcher import SpeakerMatcher
 from meeting_scribe.diarization.profiles import ProfileStore
+from meeting_scribe.dictation.cleanup import DictationCleanup
+from meeting_scribe.dictation.engine import DictationEngine
+from meeting_scribe.dictation.listener import DictationListener
 from meeting_scribe.hotkey.listener import HotkeyListener
 from meeting_scribe.output.markdown import MarkdownTranscript
 from meeting_scribe.output.writer import TranscriptWriter
@@ -102,6 +105,28 @@ class MeetingScribeController:
 
         # Silence detection
         self._silence_cycles = 0
+
+        # Dictation subsystem
+        self._dictation_engine: DictationEngine | None = None
+        self._dictation_listener: DictationListener | None = None
+        if self._config.dictation.enabled:
+            dictation_cleanup = DictationCleanup(
+                model=self._config.dictation.cleanup_model,
+                host=self._config.dictation.ollama_host,
+                timeout=self._config.dictation.cleanup_timeout_seconds,
+            )
+            self._dictation_engine = DictationEngine(
+                transcription_engine=self._engine,
+                cleanup=dictation_cleanup,
+                audio_device=self._config.dictation.audio_device,
+                sample_rate=self._config.audio.sample_rate,
+            )
+            self._dictation_listener = DictationListener(
+                on_start=self._dictation_engine.start_recording,
+                on_stop=self._dictation_engine.stop_recording,
+                hotkey=self._config.dictation.hotkey,
+                mode=self._config.dictation.mode,
+            )
 
         # Background result processor
         self._processor_stop = threading.Event()
@@ -193,7 +218,34 @@ class MeetingScribeController:
     # ------------------------------------------------------------------
 
     def _summarize_transcript(self, transcript_path: Path) -> None:
-        """Generate a meeting summary in the background."""
+        """Clean up and summarize a meeting transcript in the background."""
+        # Step 1: Clean up the raw transcript
+        if self._config.summarization.cleanup_transcript:
+            try:
+                from meeting_scribe.summarization.transcript_cleanup import TranscriptCleanupEngine
+
+                cleanup_engine = TranscriptCleanupEngine(
+                    model=self._config.summarization.model,
+                    host=self._config.summarization.ollama_host,
+                    timeout=self._config.summarization.timeout_seconds,
+                )
+                cleaned_path = cleanup_engine.clean_file(transcript_path)
+
+                try:
+                    import rumps
+                    rumps.notification(
+                        title="Meeting Scribe",
+                        subtitle="Transcript cleaned",
+                        message=str(cleaned_path.name),
+                    )
+                except Exception:
+                    pass
+
+                logger.info("Transcript cleanup complete: %s", cleaned_path)
+            except Exception:
+                logger.exception("Transcript cleanup failed for %s", transcript_path)
+
+        # Step 2: Generate structured summary
         try:
             from meeting_scribe.summarization.engine import SummarizationEngine
 
@@ -384,6 +436,10 @@ def main() -> None:
 
     controller._monitor.start()
     controller._hotkey_listener.start()
+
+    if controller._dictation_listener is not None:
+        controller._dictation_listener.start()
+        logger.info("Dictation hotkey active")
 
     menubar.run()  # Blocks until quit
 

@@ -66,6 +66,7 @@ class SummarizationConfig:
     model: str = "llama3.1:8b"
     ollama_host: str = "http://localhost:11434"
     timeout_seconds: int = 120
+    cleanup_transcript: bool = True
 
 
 @dataclass
@@ -73,6 +74,17 @@ class UIConfig:
     auto_detect_meetings: bool = True
     notify_on_detection: bool = True
     auto_start_recording: bool = False
+
+
+@dataclass
+class DictationConfig:
+    enabled: bool = True
+    hotkey: str = "ctrl+shift_r"
+    mode: str = "push_to_hold"  # "push_to_hold" or "toggle"
+    audio_device: str = ""  # empty = system default input
+    cleanup_model: str = "llama3.1:8b"
+    ollama_host: str = "http://localhost:11434"
+    cleanup_timeout_seconds: int = 30
 
 
 @dataclass
@@ -85,6 +97,7 @@ class Config:
     output: OutputConfig = field(default_factory=OutputConfig)
     summarization: SummarizationConfig = field(default_factory=SummarizationConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    dictation: DictationConfig = field(default_factory=DictationConfig)
 
 
 def load_config(path: str | None = None) -> Config:
@@ -111,6 +124,7 @@ def load_config(path: str | None = None) -> Config:
         "output": (OutputConfig, "output"),
         "summarization": (SummarizationConfig, "summarization"),
         "ui": (UIConfig, "ui"),
+        "dictation": (DictationConfig, "dictation"),
     }
 
     for key, (cls, attr) in section_map.items():
