@@ -8,3 +8,7 @@ logs/
 *.partial.md
 .agents/
 .beads/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db

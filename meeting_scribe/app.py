@@ -439,7 +439,12 @@ def main() -> None:
 
     if controller._dictation_listener is not None:
         controller._dictation_listener.start()
-        logger.info("Dictation hotkey active")
+
+    # Start the single unified keyboard listener after all handlers are registered.
+    # This ensures only one pynput.keyboard.Listener exists, preventing the macOS
+    # SIGABRT from concurrent TIS/TSM API access across multiple listener threads.
+    from meeting_scribe.hotkey.unified import UnifiedHotkeyListener
+    UnifiedHotkeyListener.get_instance().start()
 
     menubar.run()  # Blocks until quit
 

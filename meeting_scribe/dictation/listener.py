@@ -4,8 +4,9 @@ Supports two modes:
 - push_to_hold: Hold Ctrl+Right Shift to record, release to stop + process.
 - toggle: Tap Ctrl+Right Shift to start, tap again to stop + process.
 
-Uses pynput.keyboard.Listener (not GlobalHotKeys) to avoid the injected-arg
-crash on macOS with Python 3.13.
+Uses the UnifiedHotkeyListener singleton to avoid creating multiple
+pynput.keyboard.Listener instances, which crashes on macOS due to
+concurrent TIS/TSM API access.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from __future__ import annotations
 import logging
 import threading
 from typing import Callable
+
+from meeting_scribe.hotkey.unified import UnifiedHotkeyListener
 
 try:
     from pynput import keyboard as _keyboard
@@ -106,38 +109,30 @@ class DictationListener:
         self._pressed: set[object] = set()
         self._recording = False
         self._lock = threading.Lock()
-        self._listener: object | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def start(self) -> None:
+        """Register with the unified listener — does not create its own Listener."""
         if not _PYNPUT_AVAILABLE:
             logger.warning("pynput not available — dictation hotkey disabled")
             return
-        try:
-            self._listener = _keyboard.Listener(
-                on_press=self._on_press,
-                on_release=self._on_release,
-            )
-            self._listener.start()  # type: ignore[attr-defined]
-            logger.info(
-                "Dictation hotkey active (mode=%s, trigger=%s)",
-                self._mode,
-                self._trigger,
-            )
-        except Exception:
-            logger.exception("Failed to start dictation hotkey listener")
-            self._listener = None
+        unified = UnifiedHotkeyListener.get_instance()
+        unified.register(
+            "dictation",
+            on_press=self._on_press,
+            on_release=self._on_release,
+        )
+        logger.info(
+            "Dictation hotkey active (mode=%s, trigger=%s)",
+            self._mode,
+            self._trigger,
+        )
 
     def stop(self) -> None:
-        if self._listener is not None:
-            try:
-                self._listener.stop()  # type: ignore[attr-defined]
-            except Exception:
-                pass
-            self._listener = None
+        """No-op — lifecycle managed by UnifiedHotkeyListener."""
 
     # ------------------------------------------------------------------
     # Internal callbacks
